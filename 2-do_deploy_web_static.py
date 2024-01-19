@@ -1,55 +1,56 @@
 #!/usr/bin/python3
-from fabric.api import env, put, run
-from os.path import exists
+"""Compress web static package
+"""
+from fabric.api import *
+from datetime import datetime
+from os import path
 
-# Set the target web server IP addresses
-env.hosts = ['<IP web-01>', '<IP web-02>']
+
+env.hosts = ['100.25.143.99', '54.87.240.11']
+env.user = 'ubuntu'
+env.key_filename = '~/.ssh/id_rsa'
+
 
 def do_deploy(archive_path):
-    """
-    Distributes an archive to web servers and deploys the content.
+        """Deploy web files to server
+        """
+        try:
+                if not (path.exists(archive_path)):
+                        return False
 
-    Args:
-        archive_path (str): Path to the archive file.
+                # upload archive
+                put(archive_path, '/tmp/')
 
-    Returns:
-        bool: True if all operations have been done correctly, False otherwise.
-    """
-    # Check if the specified archive file exists
-    if not exists(archive_path):
-        return False
+                # create target dir
+                timestamp = archive_path[-18:-4]
+                run('sudo mkdir -p /data/web_static/\
+releases/web_static_{}/'.format(timestamp))
 
-    # Upload the archive to the /tmp/ directory on the web servers
-    put(archive_path, '/tmp/')
+                # uncompress archive and delete .tgz
+                run('sudo tar -xzf /tmp/web_static_{}.tgz -C \
+/data/web_static/releases/web_static_{}/'
+                    .format(timestamp, timestamp))
 
-    # Extract information from the archive path to construct release path
-    archive_filename = archive_path.split('/')[-1]
-    release_path = "/data/web_static/releases/{}".format(archive_filename.split('.')[0])
+                # remove archive
+                run('sudo rm /tmp/web_static_{}.tgz'.format(timestamp))
 
-    # Create the release path on the web server
-    run("mkdir -p {}".format(release_path))
+                # move contents into host web_static
+                run('sudo mv /data/web_static/releases/web_static_{}/web_static/* \
+/data/web_static/releases/web_static_{}/'.format(timestamp, timestamp))
 
-    # Uncompress the archive in the specified release path
-    run("tar -xzf /tmp/{} -C {}".format(archive_filename, release_path))
+                # remove extraneous web_static dir
+                run('sudo rm -rf /data/web_static/releases/\
+web_static_{}/web_static'
+                    .format(timestamp))
 
-    # Remove the uploaded archive from the /tmp/ directory
-    run("rm /tmp/{}".format(archive_filename))
+                # delete pre-existing sym link
+                run('sudo rm -rf /data/web_static/current')
 
-    # Move the contents of the uncompressed archive to the release path
-    run("mv {}/web_static/* {}".format(release_path, release_path))
+                # re-establish symbolic link
+                run('sudo ln -s /data/web_static/releases/\
+web_static_{}/ /data/web_static/current'.format(timestamp))
+        except:
+                return False
 
-    # Remove the 'web_static' directory within the release path
-    run("rm -rf {}/web_static".format(release_path))
-
-    # Remove the existing symbolic link at /data/web_static/current
-    run("rm -rf /data/web_static/current")
-
-    # Create a new symbolic link pointing to the new release path
-    run("ln -s {} /data/web_static/current".format(release_path))
-
-    # Print a success message
-    print("New version deployed!")
-
-    # Return True to indicate success
-    return True
-
+        # return True on success
+        return True
