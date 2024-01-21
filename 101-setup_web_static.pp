@@ -36,4 +36,3 @@ exec { '/usr/bin/env apt -y update' : }
 -> exec { 'chown -R ubuntu:ubuntu /data/':
   path => '/usr/bin/:/usr/local/bin/:/bin/'
 }
-                                           
